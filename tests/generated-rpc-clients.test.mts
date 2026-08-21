@@ -51,6 +51,8 @@ test('lazy generated RPC client retries after a rejected constructor load', asyn
       throw new Error('chunk load failed');
     }
     return TestClient;
+  }, {
+    ping: true,
   });
 
   const client = new LazyTestClient('https://example.test');
@@ -77,6 +79,8 @@ test('lazy generated RPC client ignores symbol lookups without loading construct
   const LazyTestClient = createLazyRpcClientConstructor<TestClient>(async () => {
     attempts += 1;
     return TestClient;
+  }, {
+    ping: true,
   });
 
   const client = new LazyTestClient('https://example.test');
@@ -84,4 +88,32 @@ test('lazy generated RPC client ignores symbol lookups without loading construct
 
   assert.equal(symbolValue, undefined);
   assert.equal(attempts, 0);
+});
+
+test('lazy generated RPC client rejects non-method property reads without loading constructor', async () => {
+  let attempts = 0;
+
+  class TestClient {
+    readonly instanceId = 'rpc-client-instance';
+
+    async ping(): Promise<string> {
+      return 'pong';
+    }
+  }
+
+  const LazyTestClient = createLazyRpcClientConstructor<TestClient>(async () => {
+    attempts += 1;
+    return TestClient;
+  }, {
+    ping: true,
+  });
+
+  const client = new LazyTestClient('https://example.test');
+
+  assert.equal(client.toString(), '[object Object]');
+  assert.equal(attempts, 0);
+  assert.throws(() => client.instanceId, /only expose generated RPC methods/);
+  assert.equal(attempts, 0);
+  assert.equal(await client.ping(), 'pong');
+  assert.equal(attempts, 1);
 });
